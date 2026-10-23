@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Zoids LoRA Asset Formatter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #222; color: #fff; padding: 40px; text-align: center; }
+        .container { background: #333; padding: 30px; border-radius: 8px; display: inline-block; }
+        button { background: #4CAF50; color: white; padding: 15px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 20px; }
+        button:hover { background: #45a049; }
+        input[type="file"] { margin: 20px 0; }
+        #status { margin-top: 20px; font-weight: bold; color: #4CAF50; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Zoids Asset Formatter</h2>
+        <p>Select your raw GBA sprites. This will upscale them, apply the magenta background, and generate the text tags.</p>
+        <input type="file" id="fileInput" multiple accept="image/png">
+        <br>
+        <button onclick="processFiles()">Format & Download ZIP</button>
+        <p id="status"></p>
+    </div>
+
+    <script>
+    async function processFiles() {
+        const files = document.getElementById('fileInput').files;
+        if (files.length === 0) return alert("Please select your PNG files first!");
+        
+        document.getElementById('status').innerText = "Processing images, please wait...";
+        const zip = new JSZip();
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const img = new Image();
+            const imgUrl = URL.createObjectURL(file);
+            
+            await new Promise(resolve => {
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 512;
+                    canvas.height = 512;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 1. Create Magenta Background
+                    ctx.fillStyle = '#FF00FF';
+                    ctx.fillRect(0, 0, 512, 512);
+                    
+                    // 2. Disable smoothing for Nearest Neighbor pixel scaling
+                    ctx.imageSmoothingEnabled = false;
+                    
+                    // 3. Calculate integer scale to fit 512x512
+                    let scale = Math.floor(Math.min(512 / img.width, 512 / img.height));
+                    if (scale < 1) scale = 1;
+                    
+                    const newW = img.width * scale;
+                    const newH = img.height * scale;
+                    const offsetX = (512 - newW) / 2;
+                    const offsetY = (512 - newH) / 2;
+                    
+                    // 4. Draw crisp upscaled image in center
+                    ctx.drawImage(img, offsetX, offsetY, newW, newH);
+                    
+                    // 5. Add image to ZIP folder
+                    const baseName = file.name.replace(/\.[^/.]+$/, "");
+                    const dataUrl = canvas.toDataURL("image/png").split(',')[1];
+                    zip.file(baseName + ".png", dataUrl, {base64: true});
+                    
+                    // 6. Add Kohya text tag file to ZIP folder
+                    zip.file(baseName + ".txt", "16-bit, pixel art, gba style, retro game sprite, mecha, zoid, solid magenta background, flat shading, thick black outlines");
+                    
+                    resolve();
+                };
+                img.src = imgUrl;
+            });
+        }
+        
+        zip.generateAsync({type:"blob"}).then(content => {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = "Zoids_Formatted_Assets.zip";
+            link.click();
+            document.getElementById('status').innerText = "Done! Check your Downloads folder for the ZIP.";
+        });
+    }
+    </script>
+</body>
+</html>
